@@ -24,9 +24,11 @@ jobs:
       run: |
         npm audit --audit-level=high --json > audit-results.json || true
         if [ $(jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' audit-results.json) -gt 0 ]; then
-          echo "::error::High or critical vulnerabilities found in npm packages"
+          echo "NPM PACKAGES: FAIL - High or critical vulnerabilities found"
           npm audit --audit-level=high
           exit 1
+        else
+          echo "NPM PACKAGES: PASS - No high or critical vulnerabilities found"
         fi
     
     - name: Configure AWS credentials
