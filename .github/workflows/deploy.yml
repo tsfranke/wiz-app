@@ -34,6 +34,7 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$TIMESTAMP
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
         echo "IMAGE_TAG=$TIMESTAMP" >> $GITHUB_ENV
+        echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_ENV
     
     - name: Update EKS kubeconfig
       run: |
