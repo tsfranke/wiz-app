@@ -12,6 +12,23 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Run npm audit
+      run: |
+        npm audit --audit-level=high --json > audit-results.json || true
+        if [ $(jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' audit-results.json) -gt 0 ]; then
+          echo "::error::High or critical vulnerabilities found in npm packages"
+          npm audit --audit-level=high
+          exit 1
+        fi
+    
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -35,6 +52,33 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
         echo "IMAGE_TAG=$TIMESTAMP" >> $GITHUB_ENV
         echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_ENV
+    
+    - name: Wait for ECR scan and check results
+      run: |
+        echo "Waiting for ECR vulnerability scan to complete..."
+        sleep 30
+        
+        SCAN_STATUS=$(aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanStatus.status' --output text 2>/dev/null || echo "IN_PROGRESS")
+        
+        while [ "$SCAN_STATUS" = "IN_PROGRESS" ]; do
+          echo "Scan still in progress, waiting..."
+          sleep 15
+          SCAN_STATUS=$(aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanStatus.status' --output text 2>/dev/null || echo "IN_PROGRESS")
+        done
+        
+        if [ "$SCAN_STATUS" = "COMPLETE" ]; then
+          HIGH_CRITICAL=$(aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanFindings.findingCounts.HIGH + imageScanFindings.findingCounts.CRITICAL' --output text 2>/dev/null || echo "0")
+          
+          if [ "$HIGH_CRITICAL" != "None" ] && [ "$HIGH_CRITICAL" -gt 0 ]; then
+            echo "::error::ECR scan found $HIGH_CRITICAL high/critical vulnerabilities"
+            aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanFindings.findings[?severity==`HIGH` || severity==`CRITICAL`]'
+            exit 1
+          else
+            echo "ECR scan passed - no high/critical vulnerabilities found"
+          fi
+        else
+          echo "::warning::ECR scan failed or incomplete"
+        fi
     
     - name: Update EKS kubeconfig
       run: |
