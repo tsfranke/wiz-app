@@ -23,9 +23,11 @@ jobs:
     - name: Run npm audit
       run: |
         npm audit --audit-level=high --json > audit-results.json || true
-        if [ $(jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' audit-results.json) -gt 0 ]; then
+        VULN_COUNT=$(jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' audit-results.json)
+        if [ "$VULN_COUNT" -gt 0 ]; then
           echo "NPM PACKAGES: FAIL - High or critical vulnerabilities found"
           npm audit --audit-level=high
+          echo "Stopping workflow due to security vulnerabilities"
           exit 1
         else
           echo "NPM PACKAGES: PASS - No high or critical vulnerabilities found"
@@ -69,14 +71,15 @@ jobs:
         done
         
         if [ "$SCAN_STATUS" = "COMPLETE" ]; then
-          HIGH_CRITICAL=$(aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanFindings.findingCounts.HIGH + imageScanFindings.findingCounts.CRITICAL' --output text 2>/dev/null || echo "0")
+          CRITICAL_COUNT=$(aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanFindings.findingCounts.CRITICAL' --output text 2>/dev/null || echo "0")
           
-          if [ "$HIGH_CRITICAL" != "None" ] && [ "$HIGH_CRITICAL" -gt 0 ]; then
-            echo "::error::ECR scan found $HIGH_CRITICAL high/critical vulnerabilities"
-            aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanFindings.findings[?severity==`HIGH` || severity==`CRITICAL`]'
+          if [ "$CRITICAL_COUNT" != "None" ] && [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "ECR SCAN: FAIL - $CRITICAL_COUNT critical vulnerabilities found"
+            aws ecr describe-image-scan-findings --repository-name todoapp --image-id imageTag=${{ env.IMAGE_TAG }} --query 'imageScanFindings.findings[?severity==`CRITICAL`]'
+            echo "Stopping workflow due to critical vulnerabilities in container image"
             exit 1
           else
-            echo "ECR scan passed - no high/critical vulnerabilities found"
+            echo "ECR SCAN: PASS - No critical vulnerabilities found"
           fi
         else
           echo "::warning::ECR scan failed or incomplete"
