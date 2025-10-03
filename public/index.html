@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Todo App - Wiz Exercise</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .todo-form { margin-bottom: 20px; }
+        input[type="text"] { width: 70%; padding: 10px; }
+        button { padding: 10px 20px; margin-left: 10px; }
+        .todo-item { padding: 10px; border: 1px solid #ddd; margin: 5px 0; display: flex; justify-content: space-between; }
+        .delete-btn { background: #ff4444; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Todo App - Wiz Exercise</h1>
+    
+    <div class="todo-form">
+        <input type="text" id="todoInput" placeholder="Enter a new todo...">
+        <button onclick="addTodo()">Add Todo</button>
+    </div>
+    
+    <div id="todoList"></div>
+    
+    <script>
+        async function loadTodos() {
+            const response = await fetch('/api/todos');
+            const todos = await response.json();
+            const todoList = document.getElementById('todoList');
+            
+            if (Array.isArray(todos)) {
+                todoList.innerHTML = todos.map(todo => `
+                    <div class="todo-item">
+                        <span>${todo.text}</span>
+                        <button class="delete-btn" onclick="deleteTodo('${todo._id}')">Delete</button>
+                    </div>
+                `).join('');
+            } else {
+                todoList.innerHTML = '<div>Error loading todos</div>';
+            }
+        }
+        
+        async function addTodo() {
+            const input = document.getElementById('todoInput');
+            const text = input.value.trim();
+            
+            if (text) {
+                await fetch('/api/todos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                input.value = '';
+                loadTodos();
+            }
+        }
+        
+        async function deleteTodo(id) {
+            await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+            loadTodos();
+        }
+        
+        // Load todos on page load
+        loadTodos();
+        
+        // Allow Enter key to add todo
+        document.getElementById('todoInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addTodo();
+            }
+        });
+    </script>
+</body>
+</html>
