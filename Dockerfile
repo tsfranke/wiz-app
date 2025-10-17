@@ -12,7 +12,7 @@ RUN npm install
 COPY . .
 
 # Add the required wizexercise.txt file
-RUN echo "Scott Franke" > wizexercise.txt
+RUN echo "Timothy Scott Franke" > wizexercise.txt
 
 # INTENTIONAL WEAKNESS: Running as root
 EXPOSE 3000
